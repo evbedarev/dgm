@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# Ansible managed
+
+# oracle: Start/Stop Oracle Database 12c on CentOS 6 /RHEL 6
+#
+# chkconfig: 345 90 10
+# description: Oracle 12c
+#
+# processname: oracle
+#
+# Source: http://janhellevik.com/?p=923
+
+. /etc/rc.d/init.d/functions
+
+#LOCKFILE=/var/lock/subsys/oracle
+ORACLE_HOME=/u01/app/oracle/product/12.2.0/12201
+ORACLE_USER=oracle
+ORACLE_SID=ASRATES
+
+runsql () {
+$ORACLE_HOME/bin/sqlplus / as sysdba<< EOF
+startup;
+exit;
+EOF
+}
+
+case "$1" in
+'start')
+   $0 status|grep -q stopped && {
+       echo -n $"Starting Oracle Database:"
+       su - $ORACLE_USER -c "$ORACLE_HOME/bin/lsnrctl start"
+       su - $ORACLE_USER -c "$ORACLE_HOME/bin/dbstart $ORACLE_HOME"
+       #su - $ORACLE_USER -c "$ORACLE_HOME/bin/emctl start dbconsole"
+   }
+   su - $ORACLE_USER -c "$ORACLE_HOME/bin/lsnrctl status|grep -q TNS-00511 && $ORACLE_HOME/bin/lsnrctl start"
+   su - $ORACLE_USER -c "if $ORACLE_HOME/bin/lsnrctl status|grep -q 'The listener supports no services'; then echo 'alter system register;' |~/oracle.sh start; fi"
+
+   ;;
+'stop')
+    $0 status|grep -q started && {
+       echo -n $"Stopping Oracle Database:"
+       su - $ORACLE_USER -c "$ORACLE_HOME/bin/lsnrctl stop"
+       su - $ORACLE_USER -c "~/oracle.sh stop"
+       #su - $ORACLE_USER -c "$ORACLE_HOME/bin/emctl stop dbconsole"
+   }
+   ;;
+'restart')
+   $0 stop
+   $0 start
+   ;;
+'status')
+    pmon=`ps -ef | grep -w "ora_pmon_$ORACLE_SID"  | grep -v grep`
+    if [ "$pmon" != "" ] ; then
+        echo $0 started.
+    else
+        echo $0 stopped.
+    fi
+   ;;
+*)
+   echo "Usage: $0 [start|stop|restart|status]"
+   exit 1
+esac
+
+exit 0
